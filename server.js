@@ -9,18 +9,17 @@ const FileSync = require("lowdb/adapters/FileSync");
 
 const JWT_SECRET = process.env.JWT_SECRET || "change-cette-phrase-secrete";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "2026";
+const DRENA_PASSWORD = process.env.DRENA_PASSWORD || "drena2026";
 const PORT = process.env.PORT || 4000;
-const fs = require("fs");
-const dataDir = path.join(__dirname, "data");
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
 const adapter = new FileSync(path.join(__dirname, "data", "db.json"));
 const db = low(adapter);
 
 db.defaults({
   schools: [
-    { id: "challenger", name: "Collège Privé Le Challenger", city: "Boundiali", statut: "actif", echeance: "2026-09-05", passwordHash: bcrypt.hashSync("challenger2026", 8), data: {} },
-    { id: "sacre-coeur", name: "Groupe Scolaire Sacré-Cœur", city: "Korhogo", statut: "actif", echeance: "2026-08-15", passwordHash: bcrypt.hashSync("sacrecoeur2026", 8), data: {} },
-    { id: "avenir", name: "Complexe Scolaire L'Avenir", city: "Ferkessédougou", statut: "actif", echeance: "2026-08-01", passwordHash: bcrypt.hashSync("avenir2026", 8), data: {} },
+    { id: "challenger", name: "Collège Privé Le Challenger", city: "Boundiali", region: "Boundiali", statut: "actif", echeance: "2026-09-05", passwordHash: bcrypt.hashSync("challenger2026", 8), data: {} },
+    { id: "sacre-coeur", name: "Groupe Scolaire Sacré-Cœur", city: "Korhogo", region: "Korhogo", statut: "actif", echeance: "2026-08-15", passwordHash: bcrypt.hashSync("sacrecoeur2026", 8), data: {} },
+    { id: "avenir", name: "Complexe Scolaire L'Avenir", city: "Ferkessédougou", region: "Ferkessédougou", statut: "actif", echeance: "2026-08-01", passwordHash: bcrypt.hashSync("avenir2026", 8), data: {} },
   ],
 }).write();
 
@@ -135,6 +134,42 @@ app.get("/api/schools", (req, res) => {
   res.json(schools);
 });
 
+/* ---------- Espace régional (DRENA / DDENA) ---------- */
+
+app.post("/api/drena/login", (req, res) => {
+  const { password } = req.body || {};
+  if (password !== DRENA_PASSWORD) return res.status(401).json({ error: "Code régional incorrect." });
+  res.json({ token: signToken({ role: "drena" }) });
+});
+
+// Vue consolidée : agrège les données de toutes les écoles actives à partir de leur `data` sauvegardée
+app.get("/api/drena/overview", requireAuth("drena"), (req, res) => {
+  const schools = db.get("schools").value();
+  const overview = schools.map((s) => {
+    const d = s.data || {};
+    const eleves = d.eleves || [];
+    const personnel = d.personnel || [];
+    const moyennes = d.moyennes || {};
+    const nonRemontes = eleves.filter((e) => {
+      const notes = moyennes[e.id];
+      if (!notes) return true;
+      const periodes = notes.T1 || notes.T2 || notes.T3 ? [notes.T1, notes.T2, notes.T3] : [notes];
+      return periodes.every((p) => !p || Object.keys(p).length === 0);
+    }).length;
+    return {
+      id: s.id, name: s.name, city: s.city, region: s.region || s.city, statut: s.statut,
+      effectifEleves: eleves.length,
+      effectifFilles: eleves.filter((e) => e.sexe === "F").length,
+      effectifPersonnel: personnel.length,
+      redoublants: eleves.filter((e) => e.doublant).length,
+      candidatsBepc: eleves.filter((e) => e.candidatBepc).length,
+      candidatsBac: eleves.filter((e) => e.candidatBac).length,
+      elevesNonRemontes: nonRemontes,
+    };
+  });
+  res.json(overview);
+});
+
 /* ---------- Données de l'établissement (emplois, personnel, élèves, notes, paiements, messages, cours à domicile) ---------- */
 
 app.get("/api/schools/:id/data", requireAuth("school"), schoolGuard, (req, res) => {
@@ -152,5 +187,6 @@ app.get("/", (req, res) => res.send("Serveur 2T School — en ligne."));
 
 app.listen(PORT, () => {
   console.log(`\n2T School — serveur démarré : http://localhost:${PORT}`);
-  console.log(`Code administrateur actuel : ${ADMIN_PASSWORD} (à changer dans le fichier .env)\n`);
+  console.log(`Code administrateur actuel : ${ADMIN_PASSWORD} (à changer dans le fichier .env)`);
+  console.log(`Code régional (DRENA) actuel : ${DRENA_PASSWORD} (à changer dans le fichier .env)\n`);
 });
