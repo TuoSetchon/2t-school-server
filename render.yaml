@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: 2t-school-server
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PORT
+        value: 4000
+    disk:
+      name: 2t-school-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
