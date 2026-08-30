@@ -10,7 +10,9 @@ const FileSync = require("lowdb/adapters/FileSync");
 const JWT_SECRET = process.env.JWT_SECRET || "change-cette-phrase-secrete";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "2026";
 const PORT = process.env.PORT || 4000;
-
+const fs = require("fs");
+const dataDir = path.join(__dirname, "data");
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const adapter = new FileSync(path.join(__dirname, "data", "db.json"));
 const db = low(adapter);
 
